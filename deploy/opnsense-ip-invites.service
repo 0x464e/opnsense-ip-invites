@@ -1,0 +1,30 @@
+[Unit]
+Description=Self-service IP invitations for OPNsense
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ip-invites
+Group=ip-invites
+EnvironmentFile=/etc/ip-invites/secrets.env
+ExecStart=/usr/local/bin/opnsense-ip-invites -config /etc/ip-invites/config.yaml
+StateDirectory=opnsense-ip-invites
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/opnsense-ip-invites
+UMask=0077
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

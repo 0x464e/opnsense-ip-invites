@@ -1,0 +1,33 @@
+# Merge with your existing Traefik dynamic configuration. Replace the host,
+# backend, identity-provider middleware reference and proxy secret.
+http:
+  routers:
+    ip-invites-admin:
+      rule: "Host(`invites.example.com`) && (Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/admin`) || PathPrefix(`/api/admin/`))"
+      priority: 100
+      service: ip-invites
+      middlewares:
+        - your-authentication-middleware@file
+        - ip-invites-admin-secret
+      tls: {}
+    ip-invites-public:
+      rule: "Host(`invites.example.com`)"
+      priority: 10
+      service: ip-invites
+      middlewares:
+        - ip-invites-clear-admin-secret
+      tls: {}
+  middlewares:
+    ip-invites-admin-secret:
+      headers:
+        customRequestHeaders:
+          X-Invites-Admin-Secret: "REPLACE_WITH_THE_SAME_RANDOM_SECRET_AS_THE_APP"
+    ip-invites-clear-admin-secret:
+      headers:
+        customRequestHeaders:
+          X-Invites-Admin-Secret: ""
+  services:
+    ip-invites:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8080"

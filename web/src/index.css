@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --color-ink: #172b24;
+  --color-muted: #69756e;
+  --color-leaf: #195d46;
+  --color-leaf-light: #edf5ef;
+  --color-line: #e1e6df;
+  --color-paper: #f7f8f5;
+}
+
+@layer base {
+  body {
+    @apply m-0 bg-paper font-sans text-ink antialiased;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  button,
+  a,
+  input,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:enabled,
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 3px solid #79b69b;
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: #d6eadb;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-paper disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-leaf bg-leaf text-white hover:bg-[#124c38];
+  }
+  .btn-danger {
+    @apply border-red-200 bg-red-50 text-red-800 hover:bg-red-100;
+  }
+  .btn-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-paper hover:text-ink disabled:opacity-40;
+  }
+  .field {
+    @apply min-h-11 min-w-0 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-base sm:text-sm text-ink shadow-xs placeholder:text-muted/70;
+  }
+  .label {
+    @apply mb-2 block text-sm font-medium;
+  }
+  .hint {
+    @apply mt-1.5 text-xs leading-relaxed text-muted;
+  }
+  .panel {
+    @apply rounded-2xl border border-line bg-white shadow-[0_2px_4px_0_rgb(23_43_36_/_0.02)];
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-[0.15em] uppercase text-muted;
+  }
+  .tag {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-line bg-paper px-2 py-1 text-xs font-medium capitalize text-muted;
+  }
+  .tag-active {
+    @apply border-[#dceadd] bg-leaf-light text-leaf;
+  }
+  .tag-error {
+    @apply border-amber-200 bg-amber-50 text-amber-900;
+  }
+  .th {
+    @apply relative px-5 py-3.5 text-left text-xs font-medium text-muted;
+  }
+  .td {
+    @apply px-5 py-4 text-sm;
+  }
+}
+
+dialog {
+  margin: auto;
+  width: min(32rem, calc(100dvw - 2rem));
+  max-width: calc(100dvw - 2rem);
+  max-height: calc(100dvh - 2rem);
+}
+dialog::backdrop {
+  background: rgb(16 34 26 / 0.35);
+  backdrop-filter: blur(3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,28 @@
+services:
+  ip-invites:
+    build:
+      context: ..
+    image: opnsense-ip-invites:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../config.yaml:/etc/ip-invites/config.yaml:ro
+      - invites-data:/data
+    environment:
+      OPNSENSE_API_KEY: ${OPNSENSE_API_KEY:?Set OPNSENSE_API_KEY}
+      OPNSENSE_API_SECRET: ${OPNSENSE_API_SECRET:?Set OPNSENSE_API_SECRET}
+      INVITES_ADMIN_PROXY_SECRET: ${INVITES_ADMIN_PROXY_SECRET:?Set INVITES_ADMIN_PROXY_SECRET}
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  invites-data:
