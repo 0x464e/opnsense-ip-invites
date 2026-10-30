@@ -174,6 +174,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/public/invites/{token}", s.public(s.preview))
 	mux.HandleFunc("POST /api/public/invites/{token}/authorize", s.public(s.authorize))
 	mux.HandleFunc("GET /api/admin/bootstrap", s.admin(s.bootstrap))
+	mux.HandleFunc("POST /api/admin/lists", s.admin(s.createList))
+	mux.HandleFunc("POST /api/admin/lists/{id}", s.admin(s.updateList))
+	mux.HandleFunc("POST /api/admin/lists/{id}/delete", s.admin(s.deleteList))
 	mux.HandleFunc("GET /api/admin/links", s.admin(s.links))
 	mux.HandleFunc("POST /api/admin/links", s.admin(s.createLink))
 	mux.HandleFunc("POST /api/admin/links/{id}/revoke", s.admin(s.revokeLink))
@@ -293,7 +296,12 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 	c := s.svc.Config
-	write(w, 200, map[string]any{"lists": c.Lists, "statuses": s.svc.Statuses(), "defaults": map[string]any{"link_validity_seconds": int64(c.Defaults.LinkValidity.Seconds()), "access_seconds": int64(c.Defaults.AccessDuration.Seconds()), "max_ips": c.Defaults.MaxIPs}})
+	lists, err := s.svc.DB.Lists(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	write(w, 200, map[string]any{"lists": lists, "statuses": s.svc.Statuses(), "defaults": map[string]any{"link_validity_seconds": int64(c.Defaults.LinkValidity.Seconds()), "access_seconds": int64(c.Defaults.AccessDuration.Seconds()), "max_ips": c.Defaults.MaxIPs}})
 }
 func pagination(w http.ResponseWriter, r *http.Request) (string, int, int, bool) {
 	status := r.URL.Query().Get("status")

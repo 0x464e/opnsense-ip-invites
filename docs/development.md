@@ -44,7 +44,7 @@ Open `http://127.0.0.1:5173/admin`. To find a seeded visitor link, inspect `http
 
 ## Develop against your own test environment
 
-1. Build or run the backend with a separate test YAML and dedicated, disposable OPNsense aliases.
+1. Build or run the backend with a separate test YAML; create dedicated disposable lists through the admin UI.
 2. Set the YAML public URL to `http://127.0.0.1:5173` for local Vite development.
 3. Trust only loopback for the local API connection. Set `client_ip_header` appropriately for your test proxy; loopback itself cannot be authorized as a public IPv4.
 4. Start Vite with `DEV_API_URL` and `DEV_ADMIN_PROXY_SECRET` set in its server environment. Use the same proxy secret as the backend.
@@ -58,7 +58,7 @@ A normal `go run ./cmd/opnsense-ip-invites` serves a development notice for HTML
 - `internal/config`: strict YAML validation, required defaults, path resolution, and environment/file secrets.
 - `internal/store`: schema migration, tokens, transactional grant updates, history, and authoritative membership queries.
 - `internal/firewall`: authenticated, verified HTTPS API, full pagination, and canonical address parsing.
-- `internal/service`: serialized grants/reconciliation, alias validation, restart restoration, and sync status.
+- `internal/service`: serialized list/grant mutations and reconciliation, automatic missing-alias creation and alias validation, restart restoration, and sync status.
 - `internal/httpapi`: proxy trust, admin boundary, Origin checks, rate limits, JSON API, and frontend serving.
 - `web/src`: React visitor/admin routes, dialogs, and API queries.
 

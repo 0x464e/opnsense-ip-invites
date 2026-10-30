@@ -71,3 +71,30 @@ func (f *Firewall) Delete(_ context.Context, alias, ip string) error {
 	}
 	return nil
 }
+
+func (f *Firewall) CreateAlias(_ context.Context, name string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	if f.Offline {
+		return errors.New("firewall offline")
+	}
+	if _, ok := f.Definitions[name]; ok {
+		return errors.New("alias already exists")
+	}
+	if !f.IgnoreMutations {
+		f.Definitions[name] = firewall.Alias{Name: name, Type: "external", Enabled: "1"}
+	}
+	return nil
+}
+func (f *Firewall) ActiveAliases(context.Context) (map[string]bool, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	if f.Offline {
+		return nil, errors.New("firewall offline")
+	}
+	result := map[string]bool{}
+	for name := range f.Tables {
+		result[name] = true
+	}
+	return result, nil
+}

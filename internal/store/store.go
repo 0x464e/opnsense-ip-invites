@@ -115,7 +115,7 @@ func (s *Store) migrate() error {
 	if err = tx.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if version > 1 {
+	if version > 2 {
 		return errors.New("database was created by a newer application version")
 	}
 	if version == 0 {
@@ -135,6 +135,14 @@ CREATE INDEX links_list ON links(list_id);
 CREATE TABLE managed_aliases (alias TEXT PRIMARY KEY);
 PRAGMA user_version=1;`)
 		if err != nil {
+			return err
+		}
+	}
+	if version < 2 {
+		if _, err = tx.Exec(`CREATE TABLE access_lists (
+          id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
+          alias TEXT NOT NULL UNIQUE, deleted_at INTEGER NOT NULL DEFAULT 0
+        ); PRAGMA user_version=2;`); err != nil {
 			return err
 		}
 	}

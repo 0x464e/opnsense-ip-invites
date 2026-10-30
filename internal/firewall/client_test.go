@@ -132,3 +132,43 @@ func TestTLSVerificationAndCustomCA(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreateExternalAliasAndActiveTables(t *testing.T) {
+	for _, result := range []string{`{"result":"saved","uuid":"new-id"}`, `{"result":"failed"}`, `{"result":"saved"}`} {
+		t.Run(result, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/firewall/alias/add_item":
+					if r.Method != "POST" {
+						t.Error("creation must be POST")
+					}
+					var in struct {
+						Alias map[string]string `json:"alias"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+						t.Fatal(err)
+					}
+					if in.Alias["name"] != "INVITED" || in.Alias["type"] != "external" || in.Alias["enabled"] != "1" || in.Alias["proto"] != "IPv4" || in.Alias["content"] != "" {
+						t.Error(in)
+					}
+					fmt.Fprint(w, result)
+				case "/api/firewall/alias_util/aliases":
+					fmt.Fprint(w, `["INVITED"]`)
+				default:
+					t.Error("unexpected endpoint", r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer server.Close()
+			c, _ := New(server.URL, "key", "secret", "", time.Second)
+			err := c.CreateAlias(context.Background(), "INVITED")
+			if (err == nil) != (result == `{"result":"saved","uuid":"new-id"}`) {
+				t.Fatal(err)
+			}
+			active, err := c.ActiveAliases(context.Background())
+			if err != nil || !active["INVITED"] {
+				t.Fatal(active, err)
+			}
+		})
+	}
+}

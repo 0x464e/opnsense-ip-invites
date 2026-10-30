@@ -21,7 +21,10 @@ Every admin call requires the trusted immediate proxy and `X-Invites-Admin-Secre
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/admin/bootstrap` | Configured lists, sync statuses, and YAML-derived defaults in seconds. No credentials. |
+| GET | `/api/admin/bootstrap` | Database-backed lists, sync statuses, and YAML-derived defaults in seconds. No credentials. |
+| POST | `/api/admin/lists` | Create a list from `name`, optional `description` and optional `alias`; generates IDs and omitted alias names. Returns the list with 201, or 202 if synchronization is pending. |
+| POST | `/api/admin/lists/{id}` | Edit `name` and `description`; alias changes are rejected. |
+| POST | `/api/admin/lists/{id}/delete` | Delete the list, revoke its links/grants, and reconcile its retired alias. |
 | GET | `/api/admin/links` | Paginated invitation metadata, without raw tokens or hashes. |
 | POST | `/api/admin/links` | Create an invitation and return its metadata plus the shareable URL once. |
 | POST | `/api/admin/links/{id}/revoke` | Disable link; `{"revoke_grants":true}` also revokes its grants. Omitted flag defaults to true. |
@@ -33,7 +36,7 @@ Creation body:
 
 ```json
 {
-  "list_id": "service-access",
+  "list_id": "list-ID_FROM_BOOTSTRAP",
   "label": "Weekend group",
   "expires_at": 1900000000,
   "access_seconds": 86400,

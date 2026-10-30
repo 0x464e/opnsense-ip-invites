@@ -51,6 +51,32 @@ func run() error {
 			return
 		}
 		switch parts[3] + "/" + parts[4] {
+		case "alias_util/aliases":
+			active, _ := fake.ActiveAliases(r.Context())
+			names := []string{}
+			for name := range active {
+				names = append(names, name)
+			}
+			json.NewEncoder(w).Encode(names)
+		case "alias/add_item":
+			var in struct {
+				Alias struct {
+					Name string `json:"name"`
+				} `json:"alias"`
+			}
+			if json.NewDecoder(r.Body).Decode(&in) != nil {
+				w.WriteHeader(400)
+				return
+			}
+			if err := fake.CreateAlias(r.Context(), in.Alias.Name); err != nil {
+				json.NewEncoder(w).Encode(map[string]string{"result": "failed"})
+				return
+			}
+			// The browser fixture simulates an operator applying the new policy.
+			fake.Mu.Lock()
+			fake.Tables[in.Alias.Name] = map[string]bool{}
+			fake.Mu.Unlock()
+			json.NewEncoder(w).Encode(map[string]string{"result": "saved", "uuid": "fixture-id"})
 		case "alias/search_item":
 			defs, _ := fake.Aliases(r.Context())
 			rows := []firewall.Alias{}
@@ -100,12 +126,16 @@ func run() error {
 	c.Server.ClientIPHeader = "CF-Connecting-IP"
 	c.Defaults.LinkValidity.Duration = 2 * time.Hour
 	c.Defaults.AccessDuration.Duration = 30 * time.Minute
-	c.Lists = append(c.Lists, config.List{ID: "project-members", Name: "Project members", Description: "Access the project workspace.", Alias: "PROJECT_MEMBERS"})
 	db, err := store.Open(c.Database)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	for _, l := range []store.List{{ID: "service-access", Name: "Service access", Description: "Authorize this connection to access the shared service.", Alias: "INVITED_CLIENTS"}, {ID: "project-members", Name: "Project members", Description: "Access the project workspace.", Alias: "PROJECT_MEMBERS"}} {
+		if _, err = db.CreateList(context.Background(), l); err != nil {
+			return err
+		}
+	}
 	client, err := firewall.New(remote.URL, "test-key", "test-secret", "", time.Second)
 	if err != nil {
 		return err

@@ -24,7 +24,11 @@ func fixture(t *testing.T) (*service.Service, *testsupport.Firewall, *time.Time)
 	}
 	t.Cleanup(func() { db.Close() })
 	var c config.Config
-	c.Lists = []config.List{{ID: "access", Name: "Access", Alias: "INVITED"}, {ID: "other", Name: "Other", Alias: "OTHER"}}
+	for _, l := range []store.List{{ID: "access", Name: "Access", Alias: "INVITED"}, {ID: "other", Name: "Other", Alias: "OTHER"}} {
+		if _, err := db.CreateList(ctx, l); err != nil {
+			t.Fatal(err)
+		}
+	}
 	c.SyncInterval.Duration = time.Second
 	f := testsupport.NewFirewall("INVITED", "OTHER")
 	s, err := service.New(ctx, c, db, f)
@@ -179,7 +183,9 @@ func TestFailurePendingRestartAndRetirement(t *testing.T) {
 	syncNow(t, s)
 	has(t, f, "INVITED", "8.8.8.8", true)
 	c := s.Config
-	c.Lists = c.Lists[1:]
+	if err := s.DB.DeleteList(ctx, "access", s.Now()); err != nil {
+		t.Fatal(err)
+	}
 	restarted, err := service.New(ctx, c, s.DB, f)
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +193,7 @@ func TestFailurePendingRestartAndRetirement(t *testing.T) {
 	restarted.Now = s.Now
 	syncNow(t, restarted)
 	has(t, f, "INVITED", "8.8.8.8", false)
-	if _, _, err = restarted.Preview(ctx, a); !errors.Is(err, service.ErrList) {
+	if _, _, err = restarted.Preview(ctx, a); !errors.Is(err, store.ErrRevoked) {
 		t.Fatalf("removed list usable: %v", err)
 	}
 }

@@ -36,6 +36,10 @@ func fixture(t *testing.T) (*Server, *testsupport.Firewall) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
+	_, err = db.CreateList(context.Background(), store.List{ID: "service-access", Name: "Service access", Description: "Authorize this connection to access the shared service.", Alias: "INVITED_CLIENTS"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	fw := testsupport.NewFirewall("INVITED_CLIENTS")
 	svc, err := service.New(context.Background(), c, db, fw)
 	if err != nil {
@@ -209,5 +213,44 @@ func TestInvalidJSONAndDatabaseFailureAreNotSavedResponses(t *testing.T) {
 	w := request(s, "POST", "/api/admin/grants/missing/revoke", `{}`, "127.0.0.1:1234", "", testSecret, s.svc.Config.Server.PublicURL)
 	if w.Code != 500 {
 		t.Fatalf("database failure must not report saved/pending: %d", w.Code)
+	}
+}
+
+func TestAdminListLifecycleAndProtection(t *testing.T) {
+	s, _ := fixture(t)
+	path := "/api/admin/lists"
+	payload := `{"name":"Workspace","alias":"NEW_WORKSPACE"}`
+	for _, test := range []struct{ peer, secret, origin string }{{"203.0.113.1:2", testSecret, s.svc.Config.Server.PublicURL}, {"127.0.0.1:2", "", s.svc.Config.Server.PublicURL}, {"127.0.0.1:2", testSecret, "https://other.example"}} {
+		if w := request(s, "POST", path, payload, test.peer, "", test.secret, test.origin); w.Code != 403 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	call := func(path, body string) *httptest.ResponseRecorder {
+		return request(s, "POST", path, body, "127.0.0.1:2", "", testSecret, s.svc.Config.Server.PublicURL)
+	}
+	w := call(path, payload)
+	if w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var created struct {
+		List store.List `json:"list"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if w = call(path, payload); w.Code != 409 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = call(path+"/"+created.List.ID, `{"name":"Changed","description":"Updated"}`); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = call(path+"/"+created.List.ID, `{"name":"Changed","alias":"OTHER"}`); w.Code != 400 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = call(path+"/"+created.List.ID+"/delete", `{}`); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if _, err := s.svc.DB.List(context.Background(), created.List.ID); err == nil {
+		t.Fatal("list remains active")
 	}
 }

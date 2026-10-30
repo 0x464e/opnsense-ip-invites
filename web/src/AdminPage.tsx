@@ -16,11 +16,17 @@ import {
   X,
 } from 'lucide-react'
 import { api, date, duration, state } from './api'
-import type { Bootstrap, Grant, Invite, MutationResult, Page } from './api'
+import type { AccessList, Bootstrap, Grant, Invite, MutationResult, Page } from './api'
+import { ListEditor, DeleteListDialog } from './ListDialogs'
 import { Brand, ErrorNotice, Footer, Modal, Spinner } from './components'
 
 type Dialog =
-  { kind: 'create' } | { kind: 'link'; invite: Invite } | { kind: 'grant'; grant: Grant } | null
+  | { kind: 'list'; list?: AccessList }
+  | { kind: 'delete-list'; list: AccessList }
+  | { kind: 'create' }
+  | { kind: 'link'; invite: Invite }
+  | { kind: 'grant'; grant: Grant }
+  | null
 
 export default function AdminPage() {
   const client = useQueryClient()
@@ -68,9 +74,7 @@ export default function AdminPage() {
   const listName = (id: string) =>
     boot.data?.lists.find((list) => list.id === id)?.name || `${id} (removed)`
   const ready =
-    boot.data &&
-    boot.data.statuses.length > 0 &&
-    boot.data.statuses.every((status) => !status.error && status.last_success)
+    boot.data && boot.data.statuses.every((status) => !status.error && status.last_success)
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="border-b border-line bg-white">
@@ -93,7 +97,7 @@ export default function AdminPage() {
           </div>
           <button
             className="btn btn-primary"
-            disabled={!boot.data}
+            disabled={!boot.data?.lists.length}
             onClick={() => setDialog({ kind: 'create' })}
           >
             <Plus size={17} />
@@ -121,7 +125,7 @@ export default function AdminPage() {
         )}
         <section aria-label="Overview" className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Metric
-            label="Configured lists"
+            label="Access lists"
             value={boot.data?.lists.length}
             icon={<ListFilter size={19} />}
           />
@@ -140,6 +144,14 @@ export default function AdminPage() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="eyebrow">Your lists</h2>
             <button
+              className="btn"
+              disabled={!boot.data}
+              onClick={() => setDialog({ kind: 'list' })}
+            >
+              <Plus size={14} />
+              New list
+            </button>
+            <button
               className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-ink disabled:opacity-50"
               disabled={sync.isPending || !boot.data}
               onClick={() => sync.mutate()}
@@ -149,6 +161,11 @@ export default function AdminPage() {
             </button>
           </div>
           <ErrorNotice error={sync.error} />
+          {boot.data && boot.data.lists.length === 0 && (
+            <p className="panel p-5 text-sm text-muted">
+              Create your first list to start inviting people.
+            </p>
+          )}
           <div className="grid gap-3 md:grid-cols-2">
             {boot.data?.lists.map((list) => {
               const status = boot.data.statuses.find((item) => item.alias === list.alias)
@@ -168,6 +185,22 @@ export default function AdminPage() {
                         ? `${status.actual} IP${status.actual === 1 ? '' : 's'} · synced`
                         : 'Pending sync'}
                     </span>
+                  </div>
+                  <div className="mt-3 flex gap-3">
+                    <button
+                      className="text-xs font-medium text-muted hover:text-ink"
+                      aria-label={`Edit ${list.name}`}
+                      onClick={() => setDialog({ kind: 'list', list })}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="text-xs font-medium text-muted hover:text-ink"
+                      aria-label={`Delete ${list.name}`}
+                      onClick={() => setDialog({ kind: 'delete-list', list })}
+                    >
+                      Delete
+                    </button>
                   </div>
                   {status?.error && (
                     <p className="mt-3 text-xs leading-relaxed text-amber-900">{status.error}</p>
@@ -379,6 +412,12 @@ export default function AdminPage() {
         </p>
       </main>
       <Footer />
+      {dialog?.kind === 'list' && (
+        <ListEditor list={dialog.list} onClose={() => setDialog(null)} onSaved={changed} />
+      )}
+      {dialog?.kind === 'delete-list' && (
+        <DeleteListDialog list={dialog.list} onClose={() => setDialog(null)} onSaved={changed} />
+      )}
       {dialog?.kind === 'create' && boot.data && (
         <CreateInvite
           bootstrap={boot.data}

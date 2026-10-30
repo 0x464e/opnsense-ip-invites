@@ -42,21 +42,18 @@ type Service struct {
 }
 
 func New(ctx context.Context, c config.Config, db *store.Store, api firewall.API) (*Service, error) {
-	aliases := []string{}
-	for _, l := range c.Lists {
-		aliases = append(aliases, l.Alias)
-	}
-	if err := db.RegisterAliases(ctx, aliases); err != nil {
+	known, err := db.Aliases(ctx)
+	if err != nil {
 		return nil, err
 	}
-	known, err := db.Aliases(ctx)
+	lists, err := db.Lists(ctx)
 	if err != nil {
 		return nil, err
 	}
 	statuses := map[string]Status{}
 	for _, alias := range known {
 		retired := true
-		for _, list := range c.Lists {
+		for _, list := range lists {
 			if list.Alias == alias {
 				retired = false
 				break
@@ -66,21 +63,17 @@ func New(ctx context.Context, c config.Config, db *store.Store, api firewall.API
 	}
 	return &Service{Config: c, DB: db, api: api, statuses: statuses, Now: time.Now}, nil
 }
-func (s *Service) List(id string) (config.List, bool) {
-	for _, l := range s.Config.Lists {
-		if l.ID == id {
-			return l, true
-		}
-	}
-	return config.List{}, false
+func (s *Service) List(id string) (store.List, bool) {
+	l, err := s.DB.List(context.Background(), id)
+	return l, err == nil
 }
-func (s *Service) Preview(ctx context.Context, token string) (store.Link, config.List, error) {
+func (s *Service) Preview(ctx context.Context, token string) (store.Link, store.List, error) {
 	l, err := s.DB.LookupToken(ctx, token)
 	if err != nil {
-		return l, config.List{}, err
+		return l, store.List{}, err
 	}
 	if err = store.ValidLink(l, s.Now()); err != nil {
-		return l, config.List{}, err
+		return l, store.List{}, err
 	}
 	list, ok := s.List(l.ListID)
 	if !ok {
@@ -161,9 +154,6 @@ func (s *Service) Statuses() []Status {
 }
 func (s *Service) Ready() bool {
 	statuses := s.Statuses()
-	if len(statuses) == 0 {
-		return false
-	}
 	for _, v := range statuses {
 		if v.Error != "" || v.LastSuccess == 0 {
 			return false
@@ -187,7 +177,15 @@ func (s *Service) syncLocked(ctx context.Context, only string) error {
 	if err != nil {
 		return err
 	}
+	lists, err := s.DB.Lists(ctx)
+	if err != nil {
+		return err
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
 	definitions, defErr := s.api.Aliases(ctx)
+	active, activeErr := s.api.ActiveAliases(ctx)
 	var failures []error
 	for _, alias := range aliases {
 		if only != "" && alias != only {
@@ -200,7 +198,7 @@ func (s *Service) syncLocked(ctx context.Context, only string) error {
 		status.Retired = true
 		desired := map[string]bool{}
 		var localErr error
-		for _, l := range s.Config.Lists {
+		for _, l := range lists {
 			if l.Alias == alias {
 				status.Retired = false
 				desired, localErr = s.DB.Desired(ctx, l.ID, s.Now())
@@ -220,8 +218,26 @@ func (s *Service) syncLocked(ctx context.Context, only string) error {
 				s.setStatus(status)
 				continue
 			}
-			if !exists || definition.Type != "external" || definition.Enabled != "1" {
+			if !exists && !status.Retired {
+				if e := s.api.CreateAlias(ctx, alias); e != nil {
+					status.Error = e.Error()
+				} else {
+					refreshed, e := s.api.Aliases(ctx)
+					if e != nil {
+						status.Error = e.Error()
+					} else {
+						definition, exists = refreshed[alias]
+					}
+				}
+			}
+			if status.Error != "" {
+				// Leave a failed creation pending; retry on the next sync.
+			} else if !exists || definition.Type != "external" || definition.Enabled != "1" {
 				status.Error = "alias must exist, be enabled, and have type External"
+			} else if activeErr != nil {
+				status.Error = activeErr.Error()
+			} else if !active[alias] && !status.Retired {
+				status.Error = "Alias exists but its PF table is not active; reference it in an enabled firewall policy and apply changes in OPNsense"
 			} else {
 				actual, e := s.api.List(ctx, alias)
 				if e == nil {

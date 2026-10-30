@@ -2,7 +2,7 @@
 
 ## Prepare dedicated aliases
 
-In **Firewall → Aliases**, create and apply an alias of type **External (advanced)** for each configured list. For the example configuration, its name is `INVITED_CLIENTS`. Use aliases that are dedicated exclusively to this application and initially empty. Keep the OPNsense alias enabled.
+Create lists in `/admin`. Choose an alias name, or leave it empty to generate a unique name. The app creates missing definitions as enabled, empty **External (advanced)** aliases restricted to IPv4. Existing aliases must be enabled External aliases, initially empty and dedicated exclusively to the app. Definitions of existing aliases are never overwritten.
 
 Use the alias as a source or destination in your own rules. The application has no knowledge of what those rules permit or deny. Membership management is generic; the invitation page's display name and description should accurately explain the access your own policies provide.
 
@@ -12,12 +12,14 @@ Do not reuse an existing shared or manually maintained alias. The application's 
 
 ## API account
 
-Create a dedicated local API user and generate an API key/secret. On current OPNsense installations the table-operation privilege is **Diagnostics: PF Table IP addresses**. Also grant read access to alias definitions, normally through **Firewall: Aliases**, so the application can verify the type and enabled state. Names and granularity may vary by OPNsense version; inspect the user's Effective Privileges.
+Create a dedicated local API user and generate an API key/secret. On current OPNsense installations the table-operation privilege is **Diagnostics: PF Table IP addresses**. Also grant alias management access, normally through **Firewall: Aliases**, so the application can create missing definitions and verify their type and enabled state. Names and granularity may vary by OPNsense version; inspect the user's Effective Privileges.
 
 Required endpoints:
 
 | Operation | Endpoint |
 |---|---|
+| Create a missing definition | `POST /api/firewall/alias/add_item` |
+| Read active PF tables | `GET /api/firewall/alias_util/aliases` |
 | Read alias definitions | `GET /api/firewall/alias/search_item` |
 | Read current table membership | `GET /api/firewall/alias_util/list/{alias}` |
 | Add an address | `POST /api/firewall/alias_util/add/{alias}` |
@@ -43,13 +45,17 @@ Changes and reconciliation are serialized in a single application instance. Addi
 
 The sync interval determines routine expiry cleanup latency. API outages, app downtime, and slow API responses can extend that latency. Stopping the app does not empty the firewall tables. OPNsense restarts normally clear External table content, and the next successful reconciliation restores still-active grants.
 
-## Configuration changes
+## List lifecycle
 
-On startup, aliases in the configuration are added to a persistent managed-alias registry. Aliases previously registered but no longer referenced are reconciled to an empty table. If a retired alias has already been deleted from OPNsense, cleanup considers it absent.
+Lists are stored in SQLite and managed in `/admin`; YAML contains connection settings and invitation defaults only. A new installation starts with no lists. Existing YAML lists are not imported; remove the old `lists` key before using this version.
 
-Changing a list ID creates a logically different list; its old invitation links stop authorizing. Changing the alias for an existing list moves its desired membership to the new alias. Old aliases are cleaned up. Do not repurpose a retired alias for manual use while it remains registered in this application's database.
+Missing definitions are created during reconciliation, including the startup sync and retry cycles. Creation failures leave the list pending. The app verifies the resulting definition and the active PF table, rather than reporting an empty, unapplied alias as synchronized.
 
-Configuration is read on startup; there is no hot reload or admin list editor.
+Alias creation does not apply firewall policy. Reference the alias in an enabled rule and apply in OPNsense. The app does not call `alias/reconfigure`: that endpoint reloads broader firewall configuration, potentially including unrelated pending edits.
+
+Names and descriptions can be edited immediately. IDs and alias names remain fixed so existing links and firewall references keep working. Deleting a list revokes all its links and grants atomically and queues its alias for emptying. Cleanup retries after outages and restart. The alias definition and firewall rules are retained. Deleted IDs and alias names cannot be reused by a new list; history and the managed-alias registry remain in SQLite.
+
+Do not repurpose an alias in the managed registry for manual use: reconciliation remains authoritative for its contents. No list compatibility/import migration is provided.
 
 ## Stateful filtering
 

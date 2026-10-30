@@ -24,6 +24,8 @@ type Alias struct {
 	Enabled string `json:"enabled"`
 }
 type API interface {
+	CreateAlias(context.Context, string) error
+	ActiveAliases(context.Context) (map[string]bool, error)
 	Aliases(context.Context) (map[string]Alias, error)
 	List(context.Context, string) (map[string]bool, error)
 	Add(context.Context, string, string) error
@@ -198,4 +200,35 @@ func (c *Client) Add(ctx context.Context, alias, ip string) error {
 }
 func (c *Client) Delete(ctx context.Context, alias, ip string) error {
 	return c.mutate(ctx, "delete", alias, ip)
+}
+
+// Create only the configured definition. Applying aliases reloads broader firewall
+// configuration, so policy creation and Apply remain an operator action.
+func (c *Client) CreateAlias(ctx context.Context, name string) error {
+	var res struct {
+		Result string `json:"result"`
+		UUID   string `json:"uuid"`
+	}
+	body := map[string]any{"alias": map[string]string{"name": name, "type": "external", "enabled": "1", "proto": "IPv4", "content": "", "description": "Managed by opnsense-ip-invites"}}
+	if err := c.call(ctx, "POST", "alias/add_item", body, &res); err != nil {
+		return err
+	}
+	if res.Result != "saved" || res.UUID == "" {
+		return errors.New("OPNsense did not accept alias creation; check alias write privileges and name conflicts")
+	}
+	return nil
+}
+func (c *Client) ActiveAliases(ctx context.Context) (map[string]bool, error) {
+	var names []string
+	if err := c.call(ctx, "GET", "alias_util/aliases", nil, &names); err != nil {
+		return nil, err
+	}
+	if names == nil {
+		return nil, errors.New("OPNsense returned an invalid active-alias list")
+	}
+	result := map[string]bool{}
+	for _, name := range names {
+		result[name] = true
+	}
+	return result, nil
 }

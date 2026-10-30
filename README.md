@@ -4,13 +4,13 @@ Self-service IPv4 invitations for OPNsense aliases.
 
 Create a link, share it, and let its visitors authorize their current public IPv4 address. An admin chooses the target list, link expiry, access duration, and optional IP limit. The application keeps the corresponding OPNsense alias synchronized as grants are created, renewed, revoked, and expired.
 
-This is an independent project for OPNsense users. It manages alias membership; you decide how those aliases are used. It does not create firewall rules, port forwards, or aliases.
+This is an independent project for OPNsense users. It manages alias membership; you decide how those aliases are used. It creates missing External aliases but does not create or apply firewall rules or port forwards.
 
 ## How it works
 
-1. Create a dedicated **External (advanced)** alias in OPNsense and reference it in your own policies.
-2. Add the alias to the application's YAML configuration.
-3. Open `/admin` through your authenticated reverse proxy and create an invitation.
+1. Open `/admin` through your authenticated reverse proxy and create a list. Its missing OPNsense External alias is created automatically.
+2. Reference that alias in an enabled firewall policy and apply the changes in OPNsense.
+3. Create an invitation for the list in `/admin`.
 4. A visitor opens the link on the computer and connection they intend to use, then clicks **Authorize me**.
 5. The application detects their public IPv4, records a grant, updates OPNsense, and confirms membership before displaying success.
 
@@ -21,7 +21,7 @@ Link validity and access duration are independent. A naturally expired link cann
 ## Features
 
 - Minimal React/TypeScript visitor page and admin panel.
-- Multiple lists configured in YAML, each backed by a dedicated OPNsense External alias.
+- Create, edit, and delete lists in the admin panel, each backed by a dedicated OPNsense External alias.
 - Reusable labeled links for individuals or groups, with defaults supplied by YAML.
 - Optional IP limits: `0` is unlimited; `1` replaces that invitation's previous IP; higher limits reject new IPs when full.
 - Independent, persistent grants and effective expiry across overlapping invitations.
@@ -85,7 +85,7 @@ Cloudflare Tunnel can accept IPv6 visitors even when the entire origin network i
 
 ## Operational boundaries
 
-Run one application instance with persistent local SQLite storage and exclusively app-owned aliases. Do not manually maintain addresses in those aliases: synchronization removes entries not required by the database. Retired aliases remain registered in the database for cleanup after list removal or remapping.
+Run one application instance with persistent local SQLite storage and exclusively app-owned aliases. Do not manually maintain addresses in those aliases: synchronization removes entries not required by the database. Retired aliases remain registered in the database for cleanup after list deletion.
 
 Expiry cleanup depends on the app being running and the firewall API being reachable. Removing membership does not necessarily terminate existing stateful connections. IP-based authorization identifies an internet connection, not a person; household members and carrier-NAT subscribers can share an address. A browser VPN or different route from the protected application may also produce a different source address.
 

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -27,12 +26,6 @@ func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-type List struct {
-	ID          string `yaml:"id" json:"id"`
-	Name        string `yaml:"name" json:"name"`
-	Description string `yaml:"description" json:"description"`
-	Alias       string `yaml:"alias" json:"alias"`
-}
 type Config struct {
 	Server struct {
 		Listen         string   `yaml:"listen"`
@@ -53,7 +46,6 @@ type Config struct {
 		Timeout Duration `yaml:"timeout"`
 	} `yaml:"opnsense"`
 	SyncInterval Duration `yaml:"sync_interval"`
-	Lists        []List   `yaml:"lists"`
 }
 
 func Load(path string) (Config, error) {
@@ -132,20 +124,7 @@ func (c *Config) Validate() error {
 	default:
 		return errors.New("client_ip_header must be X-Forwarded-For, X-Real-IP, CF-Connecting-IP, or empty")
 	}
-	if len(c.Lists) == 0 {
-		return errors.New("configure at least one list")
-	}
-	ids, aliases := map[string]bool{}, map[string]bool{}
-	idPattern, aliasPattern := regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`), regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,31}$`)
-	for _, l := range c.Lists {
-		if !idPattern.MatchString(l.ID) || !aliasPattern.MatchString(l.Alias) || strings.TrimSpace(l.Name) == "" || len(l.Name) > 100 || len(l.Description) > 500 {
-			return fmt.Errorf("invalid list definition %q", l.ID)
-		}
-		if ids[l.ID] || aliases[l.Alias] {
-			return errors.New("list IDs and aliases must be unique")
-		}
-		ids[l.ID], aliases[l.Alias] = true, true
-	}
+
 	return nil
 }
 

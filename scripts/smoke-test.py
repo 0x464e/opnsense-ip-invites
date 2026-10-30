@@ -35,6 +35,8 @@ def main():
             expected = "Basic " + base64.b64encode(b"test-key:test-secret").decode()
             if self.headers.get("Authorization") != expected:
                 return self.respond({}, 401)
+            if self.path == "/api/firewall/alias_util/aliases":
+                return self.respond(["SMOKE_TEST"])
             if self.path.startswith("/api/firewall/alias/search_item?"):
                 rows = [{"name": "SMOKE_TEST", "type": "external", "enabled": "1"}]
             elif self.path.startswith("/api/firewall/alias_util/list/SMOKE_TEST?"):
@@ -79,10 +81,7 @@ opnsense:
   url: "http://127.0.0.1:{firewall.server_port}"
   timeout: "1s"
 sync_interval: "1s"
-lists:
-  - id: "smoke-test"
-    name: "Smoke test"
-    alias: "SMOKE_TEST"
+
 """)
             env = os.environ.copy()
             for name in ["OPNSENSE_API_KEY", "OPNSENSE_API_SECRET", "INVITES_ADMIN_PROXY_SECRET"]:
@@ -118,7 +117,10 @@ lists:
             assert request("/admin%2Fsettings")[0] == 403
             status, html = request("/admin", admin=True)
             assert status == 200 and "OPNsense IP Invites" in html and "/assets/" in html
-            status, data = request("/api/admin/links", {"list_id": "smoke-test", "label": "Smoke invitation"}, admin=True)
+            status, data = request("/api/admin/lists", {"name": "Smoke test", "alias": "SMOKE_TEST"}, admin=True)
+            assert status == 201
+            list_id = json.loads(data)["list"]["id"]
+            status, data = request("/api/admin/links", {"list_id": list_id, "label": "Smoke invitation"}, admin=True)
             created = json.loads(data)
             assert status == 201 and created["link"]["access_seconds"] == 2700 and created["link"]["max_ips"] == 3
             token = created["url"].rsplit("/", 1)[1]

@@ -10,6 +10,7 @@ test('admin creates an invite using configured defaults; visitor authorizes; adm
   await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'New invitation', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'New invitation' })
+  await dialog.getByLabel('Access list').selectOption({ label: 'Service access' })
   await expect(dialog.getByLabel('Access per authorization')).toHaveValue('30')
   await expect(dialog.getByLabel('Access duration unit')).toHaveValue('60')
   await dialog.getByLabel('Label', { exact: true }).fill(`Browser test ${info.project.name}`)
@@ -75,4 +76,48 @@ test('errors never become a success state; admin grant view remains usable on sm
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
   )
   expect(fits).toBe(true)
+})
+
+test('admin creates a list, edits it, authorizes an invitation and deletes the list', async ({
+  page,
+}, info) => {
+  const name = `Workspace ${info.project.name}`
+  const alias = `WORKSPACE_${info.project.name.toUpperCase()}`
+  await page.goto('/admin')
+  await page.getByRole('button', { name: 'New list', exact: true }).click()
+  let dialog = page.getByRole('dialog', { name: 'New list', exact: true })
+  await dialog.getByLabel('Name', { exact: true }).fill(name)
+  await dialog.getByLabel('Description', { exact: true }).fill('Shared workspace access')
+  await dialog.getByLabel('OPNsense alias', { exact: true }).fill(alias)
+  await dialog.getByRole('button', { name: 'Create list', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Edit ${name}`, exact: true }).click()
+  dialog = page.getByRole('dialog', { name: 'Edit list', exact: true })
+  await expect(dialog.getByLabel('OPNsense alias')).toHaveAttribute('readonly', '')
+  await dialog.getByLabel('Name', { exact: true }).fill(`${name} renamed`)
+  await dialog.getByRole('button', { name: 'Save list', exact: true }).click()
+  await expect(page.getByRole('heading', { name: `${name} renamed`, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'New invitation', exact: true }).click()
+  dialog = page.getByRole('dialog', { name: 'New invitation', exact: true })
+  await dialog.getByLabel('Label', { exact: true }).fill(`Workspace invite ${info.project.name}`)
+  await dialog.getByLabel('Access list', { exact: true }).selectOption({ label: `${name} renamed` })
+  await dialog.getByRole('button', { name: 'Create invitation', exact: true }).click()
+  const created = page.getByRole('dialog', { name: 'Your invitation is ready' })
+  const url = await created.getByLabel('Invitation link').inputValue()
+  await created.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.goto(url)
+  await expect(page.getByRole('heading', { name: `${name} renamed`, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Authorize me', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'You’re all set.' })).toBeVisible()
+  await page.goto('/admin')
+  await page.getByRole('button', { name: `Delete ${name} renamed`, exact: true }).click()
+  dialog = page.getByRole('dialog', { name: 'Delete list', exact: true })
+  await expect(dialog).toContainText('revoke all its invitations')
+  await dialog.getByRole('button', { name: 'Delete list', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: `${name} renamed`, exact: true }),
+  ).not.toBeVisible()
+  await page.goto(url)
+  await expect(page.getByRole('heading', { name: 'This invitation was revoked' })).toBeVisible()
 })

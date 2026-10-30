@@ -24,10 +24,4 @@ opnsense:
 
 sync_interval: "15s"
 
-# Create and apply these External aliases yourself in OPNsense first.
-# Each alias must be dedicated exclusively to this application's management.
-lists:
-  - id: "service-access"
-    name: "Service access"
-    description: "Authorize this connection to access the shared service."
-    alias: "INVITED_CLIENTS"
+# Lists are created and managed in /admin.
