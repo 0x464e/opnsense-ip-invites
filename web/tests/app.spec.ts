@@ -1,3 +1,4 @@
+import { createServer } from 'node:http'
 import { test, expect } from '@playwright/test'
 
 test('admin creates an invite using configured defaults; visitor authorizes; admin revokes', async ({
@@ -6,7 +7,8 @@ test('admin creates an invite using configured defaults; visitor authorizes; adm
   await page.setExtraHTTPHeaders({
     'X-Test-IP': info.project.name === 'mobile' ? '9.9.9.9' : '1.1.1.1',
   })
-  await page.goto('/admin')
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Administrator access' }).click()
   await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'New invitation', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'New invitation' })
@@ -120,4 +122,40 @@ test('admin creates a list, edits it, authorizes an invitation and deletes the l
   ).not.toBeVisible()
   await page.goto(url)
   await expect(page.getByRole('heading', { name: 'This invitation was revoked' })).toBeVisible()
+})
+
+test('administrator access goes through a document request before any admin API calls', async ({
+  page,
+}) => {
+  const adminApiRequests: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/admin/'))
+      adminApiRequests.push(request.url())
+  })
+  const login = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/html' })
+    response.end('<!doctype html><title>Sign in</title><h1>Sign in</h1>')
+  })
+  await new Promise<void>((resolve) => login.listen(0, '127.0.0.1', resolve))
+  try {
+    const address = login.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Missing test login server address')
+    const loginURL = `http://127.0.0.1:${address.port}/login`
+    // Model the proxy redirecting an unauthenticated document to an identity provider.
+    await page.route('**/admin', async (route) => {
+      expect(route.request().isNavigationRequest()).toBe(true)
+      await route.fulfill({ status: 302, headers: { location: loginURL } })
+    })
+    await page.goto('/')
+    await page.getByRole('link', { name: 'Administrator access' }).click()
+    await expect(page).toHaveURL(loginURL)
+    await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).not.toBeVisible()
+    expect(adminApiRequests).toEqual([])
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      login.close((error) => (error ? reject(error) : resolve())),
+    )
+  }
 })

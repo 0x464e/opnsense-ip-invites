@@ -25,7 +25,9 @@ function Landing() {
           <p className="mt-4 text-sm leading-relaxed text-muted">
             Open the invitation link you were given to authorize your connection.
           </p>
+          {/* Let the reverse proxy authenticate the admin document request. */}
           <Link
+            reloadDocument
             className="mt-7 inline-block text-sm font-medium text-leaf underline underline-offset-4"
             to="/admin"
           >
