@@ -16,3 +16,6 @@ web/playwright-report/
 *.pem
 *.key
 coverage.out
+
+/node_modules/
+/.idea/

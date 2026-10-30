@@ -31,7 +31,7 @@ Link validity and access duration are independent. A naturally expired link cann
 
 ## Build
 
-Requirements: **Node.js 24+, npm, Go 1.26+ (latest patch recommended), and Make**. Go's automatic toolchain selection can install the version requested by `go.mod`.
+Requirements: **Node.js 24.15+, npm, Go 1.26+ (latest patch recommended), and Make**. Go's automatic toolchain selection can install the version requested by `go.mod`.
 
 ```sh
 make build
@@ -91,7 +91,7 @@ Expiry cleanup depends on the app being running and the firewall API being reach
 
 Treat invitation links as credentials. New URLs are shown once because only token hashes are stored. If a link is lost, create a replacement and revoke the old one as appropriate. Retain the database securely; it contains invitation metadata and IP history. See [security](SECURITY.md).
 
-No hosted services or telemetry are required. No GitHub workflows are included; build and release commands are ready to be used by a later pipeline.
+No hosted services or telemetry are required. GitHub CI validates changes on `master` and pull requests. Releases use a manually triggered release-it + GoReleaser workflow, with Conventional Commits, native archives, checksums, and multi-architecture Docker images. See [release setup and operation](docs/releases.md).
 
 ## License
 

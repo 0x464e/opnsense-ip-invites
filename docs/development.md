@@ -1,14 +1,14 @@
 # Development
 
-The Go module is `github.com/0x464e/opnsense-ip-invites`, matching the intended public repository. Build commands work from any checkout path and do not require a configured Git remote. The frontend starts from Vite's React/TypeScript template. Dependencies are locked by `go.sum` and `web/package-lock.json`.
+The Go module is `github.com/0x464e/opnsense-ip-invites`, matching the public repository. Build commands work from any checkout path and do not require a configured Git remote. The frontend starts from Vite's React/TypeScript template. Dependencies are locked by `go.sum`, `web/package-lock.json`, and the root release-tooling `package-lock.json`.
 
-Requirements: Node 24+, npm, Go 1.26+ with the latest patch, and Make. The Go race detector also needs a C compiler (such as GCC), although production binaries use CGO_ENABLED=0. `.node-version` records the Node major. No GitHub pipelines are installed in v1.
+Requirements: Node 24.15+, npm, Go 1.26+ with the latest patch, and Make. The Go race detector also needs a C compiler (such as GCC), although production binaries use CGO_ENABLED=0. `.node-version` records the Node major. GitHub CI and manual releases use `master`; see [the release guide](releases.md).
 
 ## Commands
 
 ```sh
 make build                  # npm ci, TS check, frontend bundle, embedded native binary
-make test                   # backend race tests and TS check
+make test                   # backend race tests, frontend checks, and release-tooling tests
 make test-browser           # desktop/mobile end-to-end tests
 make release VERSION=v0.1.0 # Linux amd64/arm64 archives and checksums
 make check-config           # validate the example without side effects
@@ -25,7 +25,7 @@ npm ci
 npx playwright install chromium
 ```
 
-Playwright may require operating-system browser libraries. Use its documented dependency installation for your development machine if it reports missing libraries. Browser tests start a Go fixture and Vite on loopback ports 18080 and 5173, then stop them. They use real application handlers, SQLite, and the real OPNsense HTTP client connected to a local mock firewall. The fixture's test-only address/admin-header injection is excluded from normal builds by the `e2e` build tag.
+Playwright may require operating-system browser libraries. Use its documented dependency installation for your development machine if it reports missing libraries. Browser tests start a Go fixture and Vite on loopback ports 18080 and 5173, then stop them. In CI, Vite serves the production bundle built earlier in the job; local runs use the development server. To reproduce CI locally, run `npm run build --prefix web` and `CI=true npm test --prefix web`. They use real application handlers, SQLite, and the real OPNsense HTTP client connected to a local mock firewall. The fixture's test-only address/admin-header injection is excluded from normal builds by the `e2e` build tag.
 
 ## Interactive mock preview
 

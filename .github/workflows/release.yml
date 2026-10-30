@@ -1,0 +1,140 @@
+name: Release
+run-name: Release (${{ inputs.existing_tag || inputs.version }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "auto, patch, minor, major, or an explicit version; first auto release is 0.1.0"
+        type: string
+        default: auto
+      existing_tag:
+        description: "Retry publication of an existing annotated tag, e.g. v0.1.0; leave version as auto"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve release source
+    runs-on: ubuntu-24.04
+    outputs:
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-fund
+      - id: resolve
+        env:
+          RELEASE_INCREMENT: ${{ inputs.version }}
+          RELEASE_EXISTING_TAG: ${{ inputs.existing_tag }}
+        run: node scripts/release.mjs resolve
+
+  checks:
+    name: Validate release commit
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_ref: ${{ needs.resolve.outputs.source_sha }}
+    permissions:
+      contents: read
+
+  publish:
+    name: Version and publish
+    needs: [resolve, checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+      RELEASE_INCREMENT: ${{ inputs.version }}
+      RELEASE_EXISTING_TAG: ${{ inputs.existing_tag }}
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE || github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: npm ci --no-fund
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-${{ needs.checks.outputs.source_sha }}
+          path: web/dist/
+      - run: node scripts/frontend-manifest.mjs verify
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Check publishing credentials
+        env:
+          DOCKER_PAT: ${{ secrets.DOCKER_PAT }}
+        run: |
+          test -n "$DOCKER_PAT" || { echo 'Set the DOCKER_PAT repository secret before publishing.' >&2; exit 1; }
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME || github.repository_owner }}
+          password: ${{ secrets.DOCKER_PAT }}
+      - name: Attach master for a new release
+        if: inputs.existing_tag == ''
+        run: |
+          git switch -C master "$SOURCE_SHA"
+          git branch --set-upstream-to=origin/master master
+      - name: Configure tag author
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+      - name: Check release configuration before creating a tag
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: v2.19.0
+          args: check
+      - name: Prepare version and notes with release-it
+        id: prepare
+        run: node scripts/release.mjs prepare
+      - name: Push only the release tag
+        if: steps.prepare.outputs.release_created == 'true' && inputs.existing_tag == ''
+        env:
+          RELEASE_TAG: ${{ steps.prepare.outputs.git_tag }}
+        run: git push origin "refs/tags/$RELEASE_TAG"
+      - name: Publish binaries, checksums, and multi-architecture image
+        if: steps.prepare.outputs.release_created == 'true'
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: v2.19.0
+          args: release --clean --release-notes "${{ steps.prepare.outputs.notes_file }}"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GORELEASER_CURRENT_TAG: ${{ steps.prepare.outputs.git_tag }}
+          PUBLISH_LATEST: ${{ steps.prepare.outputs.publish_latest }}
+      - name: Summarize release
+        if: always() && steps.prepare.outcome == 'success'
+        env:
+          RELEASE_TAG: ${{ steps.prepare.outputs.git_tag }}
+          RELEASE_CREATED: ${{ steps.prepare.outputs.release_created }}
+          PUBLICATION_RESULT: ${{ job.status }}
+          PUBLISH_LATEST: ${{ steps.prepare.outputs.publish_latest }}
+        run: |
+          if [ "$RELEASE_CREATED" = true ]; then
+            printf '## Release %s\n\nSource: `%s`\n\nPublication result: `%s`\n\nLatest channel: `%s`\n' "$RELEASE_TAG" "$SOURCE_SHA" "$PUBLICATION_RESULT" "$PUBLISH_LATEST" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '## No release needed\n\nNo new release-triggering commits were found.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi

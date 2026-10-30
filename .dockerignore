@@ -13,3 +13,7 @@ web/playwright-report
 **/*.db-*
 **/*.pem
 **/*.key
+
+node_modules
+
+.idea

@@ -12,7 +12,9 @@ build: frontend
 
 test:
 	CGO_ENABLED=1 go test -race ./...
-	cd web && $(NPM) ci --no-fund && $(NPM) run typecheck
+	cd web && $(NPM) ci --no-fund && $(NPM) run typecheck && $(NPM) run lint -- --deny-warnings
+	$(NPM) ci --no-fund
+	$(NPM) test
 
 test-browser:
 	cd web && $(NPM) test

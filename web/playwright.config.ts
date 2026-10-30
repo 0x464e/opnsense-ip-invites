@@ -16,7 +16,9 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: 'npm run dev',
+      command: process.env.CI
+        ? 'npm run preview -- --host 127.0.0.1 --port 5173 --strictPort'
+        : 'npm run dev',
       url: 'http://127.0.0.1:5173',
       env: { DEV_API_URL: 'http://127.0.0.1:18080' },
       reuseExistingServer: false,

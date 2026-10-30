@@ -4,6 +4,7 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-fund
 COPY web/ ./
+COPY scripts/frontend-manifest.mjs /src/scripts/frontend-manifest.mjs
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS backend

@@ -1,0 +1,25 @@
+{
+  "name": "opnsense-ip-invites-tooling",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "test": "node --test scripts/tests/*.test.mjs",
+    "commitlint": "commitlint",
+    "release:preview": "node scripts/release.mjs preview"
+  },
+  "overrides": {
+    "es-toolkit": "1.53.0",
+    "basic-ftp": "6.2.1",
+    "undici": "7.30.1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "@release-it/conventional-changelog": "12.0.2",
+    "conventional-changelog-conventionalcommits": "10.4.1",
+    "release-it": "21.1.1"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "git": {
+    "requireBranch": "master",
+    "requireCleanWorkingDir": true,
+    "requireUpstream": true,
+    "requireCommits": true,
+    "requireCommitsFail": false,
+    "commit": false,
+    "tag": true,
+    "tagName": "v${version}",
+    "tagMatch": "v[0-9]*.[0-9]*.[0-9]*",
+    "tagExclude": "*[-]*",
+    "tagAnnotation": "Release ${version}\n\n${changelog}",
+    "push": false
+  },
+  "npm": false,
+  "github": false,
+  "gitlab": false,
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "infile": false,
+      "preset": {
+        "name": "conventionalcommits",
+        "types": [
+          { "type": "feat", "section": "Features", "effect": "bump" },
+          { "type": "fix", "section": "Bug Fixes", "effect": "bump" },
+          { "type": "perf", "section": "Performance", "effect": "bump" },
+          { "type": "deps", "section": "Dependencies", "effect": "bump" },
+          { "type": "revert", "section": "Reverts", "effect": "bump" },
+          { "type": "docs", "section": "Documentation", "effect": "changelog" },
+          {
+            "type": "refactor",
+            "section": "Refactoring",
+            "effect": "changelog"
+          },
+          { "type": "build", "section": "Build", "effect": "changelog" },
+          {
+            "type": "ci",
+            "section": "Continuous Integration",
+            "effect": "changelog"
+          },
+          { "type": "test", "section": "Tests", "effect": "changelog" },
+          { "type": "chore", "section": "Maintenance", "effect": "changelog" },
+          { "type": "style", "section": "Styles", "effect": "changelog" }
+        ]
+      }
+    }
+  }
+}

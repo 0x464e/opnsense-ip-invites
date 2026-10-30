@@ -428,7 +428,7 @@ function CreateInvite({
   const defaults = bootstrap.defaults
   const [listID, setListID] = useState(bootstrap.lists[0]?.id || '')
   const [label, setLabel] = useState('')
-  const [expiry, setExpiry] = useState(
+  const [expiry, setExpiry] = useState(() =>
     localDate(Math.floor(Date.now() / 1000) + defaults.link_validity_seconds),
   )
   const initialUnit =

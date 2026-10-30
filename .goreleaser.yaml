@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: opnsense-ip-invites
+dist: dist/goreleaser
+
+before:
+  hooks:
+    - node scripts/prepare-release.mjs
+
+builds:
+  - id: app
+    main: ./cmd/opnsense-ip-invites
+    binary: opnsense-ip-invites
+    env: [CGO_ENABLED=0]
+    tags: [production]
+    targets: [linux_amd64, linux_arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: native
+    ids: [app]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    files:
+      - README.md
+      - LICENSE
+      - docs/**
+      - src: deploy/opnsense-ip-invites.service
+        strip_parent: true
+      - src: dist/release-files/config.example.yaml
+        strip_parent: true
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+dockers_v2:
+  - id: app-image
+    ids: [app]
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - '{{ if index .Env "DOCKERHUB_IMAGE" }}{{ .Env.DOCKERHUB_IMAGE }}{{ else }}opnsense-ip-invites{{ end }}'
+    tags:
+      - "{{ .Version }}"
+      - '{{ if eq (index .Env "PUBLISH_LATEST") "true" }}latest{{ end }}'
+    platforms: [linux/amd64, linux/arm64]
+    extra_files: [deploy/runtime-data/.keep]
+    labels:
+      org.opencontainers.image.title: opnsense-ip-invites
+      org.opencontainers.image.description: Self-service IPv4 invitations for OPNsense aliases
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.licenses: MIT
+
+release:
+  mode: keep-existing
+  replace_existing_artifacts: true
+  make_latest: '{{ eq (index .Env "PUBLISH_LATEST") "true" }}'
+  target_commitish: "{{ .FullCommit }}"
