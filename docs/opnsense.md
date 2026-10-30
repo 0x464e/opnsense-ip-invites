@@ -12,7 +12,7 @@ Do not reuse an existing shared or manually maintained alias. The application's 
 
 ## API account
 
-Create a dedicated local API user and generate an API key/secret. On current OPNsense installations the table-operation privilege is **Diagnostics: PF Table IP addresses**. Also grant alias management access, normally through **Firewall: Aliases**, so the application can create missing definitions and verify their type and enabled state. Names and granularity may vary by OPNsense version; inspect the user's Effective Privileges.
+Create a dedicated local API user and generate an API key/secret. On current OPNsense installations the table-operation privilege is **Diagnostics: PF Table IP addresses**. Also grant **Firewall: Alias: Edit**, which covers alias creation and definition reads. **Firewall: Aliases** alone is read-only and does not permit creation. These two privileges cover the app’s current endpoints; `All pages` is not required. Inspect the user's Effective Privileges. API keys use their owner's current privileges: save changes on the user without regenerating its key or secret. No application restart is needed for a privilege-only change.
 
 Required endpoints:
 
