@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { test, expect } from '@playwright/test'
 
-test('admin creates an invite using configured defaults; visitor authorizes; admin revokes', async ({
+test('admin creates an invite using configured defaults; visitor authorizes; admin extends and revokes', async ({
   page,
 }, info) => {
   await page.setExtraHTTPHeaders({
@@ -28,6 +28,16 @@ test('admin creates an invite using configured defaults; visitor authorizes; adm
   await page.getByRole('button', { name: 'Authorize me' }).click()
   await expect(page.getByRole('heading', { name: 'You’re all set.' })).toBeVisible()
   await page.goto('/admin')
+  await page.getByRole('button', { name: 'Access grants', exact: true }).click()
+  const grantRow = page.getByRole('row').filter({ hasText: `Browser test ${info.project.name}` })
+  const expiry = grantRow.getByRole('cell').nth(2)
+  const originalExpiry = await expiry.textContent()
+  await grantRow.getByRole('button', { name: /^Extend / }).click()
+  const extend = page.getByRole('dialog', { name: 'Extend access grant' })
+  await extend.getByRole('button', { name: 'Extend grant', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Access grant extended.')
+  await expect(expiry).not.toHaveText(originalExpiry!)
+  await page.getByRole('button', { name: 'Invitations', exact: true }).click()
   await page
     .getByRole('button', { name: `Revoke Browser test ${info.project.name}`, exact: true })
     .click()

@@ -18,10 +18,11 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("invite or grant not found")
-	ErrExpired  = errors.New("this invite has expired")
-	ErrRevoked  = errors.New("this invite has been revoked")
-	ErrCapacity = errors.New("this invite has reached its active IP limit")
+	ErrNotFound       = errors.New("invite or grant not found")
+	ErrExpired        = errors.New("this invite has expired")
+	ErrRevoked        = errors.New("this invite has been revoked")
+	ErrCapacity       = errors.New("this invite has reached its active IP limit")
+	ErrGrantExtension = errors.New("choose a later expiry for a grant that is still active")
 )
 
 type Link struct {
@@ -250,7 +251,14 @@ func (s *Store) Authorize(ctx context.Context, id, ip string, now time.Time) (Gr
 		return Grant{}, ErrCapacity
 	}
 	g := Grant{ID: randomID(12), LinkID: id, ListID: l.ListID, Label: l.Label, IP: ip, AuthorizedAt: now.Unix(), ExpiresAt: now.Unix() + l.AccessSeconds}
-	err = tx.QueryRowContext(ctx, `INSERT INTO grants(id,link_id,ip,authorized_at,expires_at) VALUES(?,?,?,?,?) ON CONFLICT(link_id,ip) DO UPDATE SET authorized_at=excluded.authorized_at,expires_at=excluded.expires_at,revoked_at=0 RETURNING id`, g.ID, id, ip, g.AuthorizedAt, g.ExpiresAt).Scan(&g.ID)
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO grants(id,link_id,ip,authorized_at,expires_at) VALUES(?,?,?,?,?)
+		ON CONFLICT(link_id,ip) DO UPDATE SET
+			authorized_at=excluded.authorized_at,
+			expires_at=CASE WHEN grants.revoked_at=0 THEN MAX(grants.expires_at,excluded.expires_at) ELSE excluded.expires_at END,
+			revoked_at=0
+		RETURNING id,expires_at
+	`, g.ID, id, ip, g.AuthorizedAt, g.ExpiresAt).Scan(&g.ID, &g.ExpiresAt)
 	if err != nil {
 		return Grant{}, err
 	}
@@ -293,6 +301,21 @@ func (s *Store) RevokeGrant(ctx context.Context, id string, now time.Time) error
 	}
 	return nil
 }
+
+// ExtendGrant sets an absolute expiry so retrying the same request cannot add time twice.
+func (s *Store) ExtendGrant(ctx context.Context, id string, expiresAt int64, now time.Time) (string, error) {
+	var alias string
+	err := s.db.QueryRowContext(ctx, `
+		UPDATE grants SET expires_at=?
+		WHERE id=? AND revoked_at=0 AND expires_at>? AND expires_at<=?
+		RETURNING (SELECT a.alias FROM links l JOIN access_lists a ON a.id=l.list_id WHERE l.id=grants.link_id)
+	`, expiresAt, id, now.Unix(), expiresAt).Scan(&alias)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrGrantExtension
+	}
+	return alias, err
+}
+
 func (s *Store) Desired(ctx context.Context, listID string, now time.Time) (map[string]bool, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT g.ip FROM grants g JOIN links l ON l.id=g.link_id WHERE l.list_id=? AND g.revoked_at=0 AND g.expires_at>?`, listID, now.Unix())
 	if err != nil {

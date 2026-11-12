@@ -16,7 +16,7 @@ This is an independent project for OPNsense users. It manages alias membership; 
 
 An alias contains the union of all active grants for its list. If Friday's invitation grants an IP access until Saturday, and Saturday's invitation grants the same IP access until Sunday, Friday's grant expiring **does not remove the IP**. Membership ends only when the last grant requiring it is expired or revoked.
 
-Link validity and access duration are independent. A naturally expired link cannot authorize again, but grants already issued through it retain their expiry. Admin revocation can disable only the link or also revoke its grants.
+Link validity and access duration are independent. A naturally expired link cannot authorize again, but grants already issued through it retain their expiry. Admin revocation can disable only the link or also revoke its grants. In **Access grants**, use the clock button on an active grant to set a later expiry for that IP and invitation.
 
 ## Features
 

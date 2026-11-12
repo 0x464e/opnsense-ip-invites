@@ -182,6 +182,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/links/{id}/revoke", s.admin(s.revokeLink))
 	mux.HandleFunc("GET /api/admin/grants", s.admin(s.grants))
 	mux.HandleFunc("POST /api/admin/grants/{id}/revoke", s.admin(s.revokeGrant))
+	mux.HandleFunc("POST /api/admin/grants/{id}/extend", s.admin(s.extendGrant))
 	mux.HandleFunc("POST /api/admin/sync", s.admin(s.synchronize))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { problem(w, 404, "not_found", "API endpoint not found.") })
 	mux.HandleFunc("/admin", s.admin(s.static))
@@ -410,6 +411,24 @@ func (s *Server) revokeGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mutationResult(w, s.svc.RevokeGrant(r.Context(), r.PathValue("id")))
 }
+func (s *Server) extendGrant(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ExpiresAt int64 `json:"expires_at"`
+	}
+	if !body(w, r, &in) {
+		return
+	}
+	err := s.svc.ExtendGrant(r.Context(), r.PathValue("id"), in.ExpiresAt)
+	switch {
+	case errors.Is(err, service.ErrInput):
+		problem(w, 400, "invalid_expiry", "Choose a future expiry within 10 years.")
+	case errors.Is(err, store.ErrGrantExtension):
+		problem(w, 409, "grant_not_extendable", "Choose a later expiry for a grant that is still active.")
+	default:
+		s.mutationResult(w, err)
+	}
+}
+
 func (s *Server) mutationResult(w http.ResponseWriter, err error) {
 	if err != nil && !errors.Is(err, service.ErrSync) {
 		s.fail(w, err)

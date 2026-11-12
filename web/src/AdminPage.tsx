@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ClockPlus,
   Copy,
   Globe,
   Link2,
@@ -26,6 +27,7 @@ type Dialog =
   | { kind: 'create' }
   | { kind: 'link'; invite: Invite }
   | { kind: 'grant'; grant: Grant }
+  | { kind: 'extend'; grant: Grant }
   | null
 
 export default function AdminPage() {
@@ -361,15 +363,26 @@ export default function AdminPage() {
                           <StatusTag value={state(grant)} />
                         </td>
                         <td className="td">
-                          <button
-                            className="btn-icon"
-                            disabled={state(grant) !== 'active'}
-                            aria-label={`Revoke ${grant.ip} from ${grant.label}`}
-                            title="Revoke grant"
-                            onClick={() => setDialog({ kind: 'grant', grant })}
-                          >
-                            <CircleSlash size={16} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              className="btn-icon"
+                              disabled={state(grant) !== 'active'}
+                              aria-label={`Extend ${grant.ip} from ${grant.label}`}
+                              title="Extend grant"
+                              onClick={() => setDialog({ kind: 'extend', grant })}
+                            >
+                              <ClockPlus size={16} />
+                            </button>
+                            <button
+                              className="btn-icon"
+                              disabled={state(grant) !== 'active'}
+                              aria-label={`Revoke ${grant.ip} from ${grant.label}`}
+                              title="Revoke grant"
+                              onClick={() => setDialog({ kind: 'grant', grant })}
+                            >
+                              <CircleSlash size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -427,6 +440,13 @@ export default function AdminPage() {
       )}
       {dialog?.kind === 'link' && (
         <RevokeDialog invite={dialog.invite} onClose={() => setDialog(null)} onChanged={changed} />
+      )}
+      {dialog?.kind === 'extend' && (
+        <ExtendGrantDialog
+          grant={dialog.grant}
+          onClose={() => setDialog(null)}
+          onChanged={changed}
+        />
       )}
       {dialog?.kind === 'grant' && (
         <RevokeDialog grant={dialog.grant} onClose={() => setDialog(null)} onChanged={changed} />
@@ -648,6 +668,70 @@ function CreateInvite({
     </Modal>
   )
 }
+function ExtendGrantDialog({
+  grant,
+  onClose,
+  onChanged,
+}: {
+  grant: Grant
+  onClose: () => void
+  onChanged: (message?: string) => void
+}) {
+  const [expiry, setExpiry] = useState(() => localDate(grant.expires_at + 3600))
+  const expiresAt = Math.floor(new Date(expiry).getTime() / 1000)
+  const extend = useMutation({
+    mutationFn: () =>
+      api<MutationResult>(`/api/admin/grants/${grant.id}/extend`, { expires_at: expiresAt }),
+    onSuccess: (result) => {
+      onChanged(result.message || 'Access grant extended.')
+      onClose()
+    },
+  })
+
+  return (
+    <Modal title="Extend access grant" onClose={onClose}>
+      <p className="text-sm leading-relaxed text-muted">
+        The grant for <strong className="font-mono text-ink">{grant.ip}</strong> from {grant.label}{' '}
+        expires on {date(grant.expires_at)}.
+      </p>
+      <form
+        className="mt-5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (expiresAt > grant.expires_at && !extend.isPending) extend.mutate()
+        }}
+      >
+        <label className="label" htmlFor="grant-expiry">
+          New expiry
+        </label>
+        <input
+          id="grant-expiry"
+          className="field"
+          type="datetime-local"
+          value={expiry}
+          onChange={(event) => setExpiry(event.target.value)}
+          required
+        />
+        <div className="mt-5">
+          <ErrorNotice error={extend.error} />
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!(expiresAt > grant.expires_at) || extend.isPending}
+          >
+            {extend.isPending ? 'Extending…' : 'Extend grant'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 function RevokeDialog({
   invite,
   grant,

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -191,6 +192,54 @@ func TestCompleteAuthorizationFlowAndYAMLDefaults(t *testing.T) {
 		t.Fatal("saved revocation should be pending", w.Code)
 	}
 }
+func TestExtendActiveGrant(t *testing.T) {
+	s, fw := fixture(t)
+	ctx := context.Background()
+	now := s.svc.Now()
+	s.svc.Now = func() time.Time { return now }
+	_, token, err := s.svc.CreateLink(ctx, store.Link{
+		ListID: "service-access", Label: "Group", ExpiresAt: now.Add(time.Hour).Unix(), AccessSeconds: 600,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := s.svc.Authorize(ctx, token, "8.8.8.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.svc.Authorize(ctx, token, "8.8.4.4"); err != nil {
+		t.Fatal(err)
+	}
+	extend := func(expiry int64, secret string, want int) {
+		t.Helper()
+		w := request(s, "POST", "/api/admin/grants/"+grant.ID+"/extend",
+			fmt.Sprintf(`{"expires_at":%d}`, expiry), "127.0.0.1:1234", "", secret, s.svc.Config.Server.PublicURL)
+		if w.Code != want {
+			t.Fatalf("extend grant: got %d, want %d: %s", w.Code, want, w.Body.String())
+		}
+	}
+	expiry := now.Add(2 * time.Hour).Unix()
+	extend(expiry, "", 403)
+	extend(expiry, testSecret, 200)
+	extend(expiry, testSecret, 200) // Replaying the same expiry is safe.
+	extend(expiry-60, testSecret, 409)
+
+	renewed, err := s.svc.Authorize(ctx, token, grant.IP)
+	if err != nil || renewed.ExpiresAt != expiry {
+		t.Fatalf("reauthorization shortened the extension: %+v, %v", renewed, err)
+	}
+	now = time.Unix(grant.ExpiresAt, 0)
+	if err := s.svc.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := fw.List(ctx, "INVITED_CLIENTS")
+	if err != nil || len(actual) != 1 || !actual[grant.IP] {
+		t.Fatalf("only the extended grant should remain: %v, %v", actual, err)
+	}
+	now = time.Unix(expiry, 0)
+	extend(expiry+3600, testSecret, 409)
+}
+
 func TestPublicRateLimit(t *testing.T) {
 	s, _ := fixture(t)
 	for i := 0; i < 31; i++ {

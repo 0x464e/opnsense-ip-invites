@@ -137,6 +137,23 @@ func (s *Service) RevokeGrant(ctx context.Context, id string) error {
 	}
 	return nil
 }
+func (s *Service) ExtendGrant(ctx context.Context, id string, expiresAt int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.Now()
+	if expiresAt <= now.Unix() || expiresAt > now.AddDate(10, 0, 0).Unix() {
+		return fmt.Errorf("%w: choose a future expiry within 10 years", ErrInput)
+	}
+	alias, err := s.DB.ExtendGrant(ctx, id, expiresAt, now)
+	if err != nil {
+		return err
+	}
+	if err := s.syncLocked(ctx, alias); err != nil {
+		return ErrSync
+	}
+	return nil
+}
+
 func (s *Service) Sync(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
