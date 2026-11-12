@@ -14,9 +14,9 @@ ci: improve release validation
 
 Use squash merges with a conventional PR title, which CI validates. Direct pushes to master validate the new commit range. The initial implementation commit predates this policy and does not need to be rewritten. Configure GitHub to use PR titles as squash commit titles, and allow only squash merges if enforcing this workflow through repository settings.
 
-The `CI` workflow runs on master pushes and PRs, and is reusable by the release workflow. It checks release tooling and conventions, Go module consistency, vet/race tests, YAML validation, frontend compilation, desktop/mobile browser tests, native production startup, and GoReleaser packaging. It also builds and runs a runtime container from the packaged binary. Checks use mocks, not a real OPNsense API or deployment credential.
+The `CI` workflow runs on master pushes and PRs, and is reusable by the release workflow. It checks release tooling and conventions, Go module consistency, vet/race tests, YAML validation, frontend compilation, desktop/mobile browser tests, and production binary startup against a mock firewall. The Release workflow builds and publishes the native archives and Docker images.
 
-Each frontend build writes a source-commit/checksum manifest. CI uploads the successful bundle, including that manifest. Packaging and release jobs download the same bundle and verify it before embedding it in the Go binaries. Release packaging does not rebuild the frontend or compile the binary again inside the runtime Dockerfile.
+Each frontend build writes a source-commit/checksum manifest. When Release calls CI, CI uploads the tested bundle and manifest. Release downloads and verifies that bundle before embedding it in the Go binaries.
 
 ## One-time publishing setup
 
