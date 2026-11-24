@@ -212,6 +212,9 @@ func scanLink(row scanner) (Link, error) {
 	}
 	return l, err
 }
+func (s *Store) Link(ctx context.Context, id string) (Link, error) {
+	return scanLink(s.db.QueryRowContext(ctx, "SELECT "+linkCols+" FROM links WHERE id=?", id))
+}
 func (s *Store) LookupToken(ctx context.Context, token string) (Link, error) {
 	return scanLink(s.db.QueryRowContext(ctx, "SELECT "+linkCols+" FROM links WHERE token_hash=?", tokenHash(token)))
 }

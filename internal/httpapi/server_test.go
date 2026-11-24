@@ -192,6 +192,59 @@ func TestCompleteAuthorizationFlowAndYAMLDefaults(t *testing.T) {
 		t.Fatal("saved revocation should be pending", w.Code)
 	}
 }
+func TestAdminAuthorizesIPOnAnActiveInvitation(t *testing.T) {
+	s, fw := fixture(t)
+	ctx := context.Background()
+	now := s.svc.Now()
+	s.svc.Now = func() time.Time { return now }
+	link, token, err := s.svc.CreateLink(ctx, store.Link{
+		ListID: "service-access", Label: "Manual grant", ExpiresAt: now.Add(time.Hour).Unix(),
+		AccessSeconds: 1800, MaxIPs: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin := s.svc.Config.Server.PublicURL
+	add := func(ip, secret, requestOrigin string, want int) {
+		t.Helper()
+		w := request(s, "POST", "/api/admin/links/"+link.ID+"/authorize",
+			fmt.Sprintf(`{"ip":%q}`, ip), "127.0.0.1:1234", "9.9.9.9", secret, requestOrigin)
+		if w.Code != want {
+			t.Fatalf("manual authorization returned %d, want %d: %s", w.Code, want, w.Body.String())
+		}
+	}
+	add("8.8.8.8", "", origin, 403)
+	add("8.8.8.8", testSecret, "https://example.net", 403)
+	add("2001:db8::1", testSecret, origin, 422)
+	add("10.0.0.1", testSecret, origin, 422)
+	add("8.8.8.8", testSecret, origin, 200)
+	first, err := s.svc.DB.Grants(ctx, "active", 1, 25, now)
+	if err != nil || len(first.Items) != 1 || first.Items[0].IP != "8.8.8.8" ||
+		first.Items[0].LinkID != link.ID || first.Items[0].ExpiresAt != now.Unix()+link.AccessSeconds {
+		t.Fatalf("wrong manual grant: %+v, %v", first, err)
+	}
+	actual, err := fw.List(ctx, "INVITED_CLIENTS")
+	if err != nil || len(actual) != 1 || !actual["8.8.8.8"] {
+		t.Fatalf("wrong firewall membership: %v, %v", actual, err)
+	}
+
+	// A normal visitor shares the same capacity, and a manual retry renews the same grant.
+	if _, err := s.svc.Authorize(ctx, token, "8.8.4.4"); err != nil {
+		t.Fatal(err)
+	}
+	add("1.1.1.1", testSecret, origin, 409)
+	now = now.Add(time.Minute)
+	fw.Offline = true
+	add("8.8.8.8", testSecret, origin, 202)
+	page, err := s.svc.DB.Grants(ctx, "active", 1, 25, now)
+	if err != nil || len(page.Items) != 2 || page.Items[0].ID != first.Items[0].ID ||
+		page.Items[0].ExpiresAt != now.Unix()+link.AccessSeconds {
+		t.Fatalf("renewal should remain saved during sync failure: %+v, %v", page, err)
+	}
+	now = time.Unix(link.ExpiresAt, 0)
+	add("1.1.1.1", testSecret, origin, 410)
+}
+
 func TestExtendActiveGrant(t *testing.T) {
 	s, fw := fixture(t)
 	ctx := context.Background()

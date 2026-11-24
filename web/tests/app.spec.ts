@@ -38,6 +38,21 @@ test('admin creates an invite using configured defaults; visitor authorizes; adm
   await expect(page.getByRole('status')).toContainText('Access grant extended.')
   await expect(expiry).not.toHaveText(originalExpiry!)
   await page.getByRole('button', { name: 'Invitations', exact: true }).click()
+  await page.getByRole('button', { name: `Add IP to Browser test ${info.project.name}` }).click()
+  const manual = page.getByRole('dialog', { name: 'Add IP to invitation' })
+  await expect(manual).toContainText('30 minutes')
+  const manualIP = info.project.name === 'mobile' ? '8.26.56.26' : '208.67.222.222'
+  await manual.getByLabel('Public IPv4 address').fill(manualIP)
+  await manual.getByRole('button', { name: 'Authorize IP', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('IP authorized.')
+  await page.getByRole('button', { name: 'Access grants', exact: true }).click()
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: `Browser test ${info.project.name}` })
+      .getByRole('cell', { name: manualIP, exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Invitations', exact: true }).click()
   await page
     .getByRole('button', { name: `Revoke Browser test ${info.project.name}`, exact: true })
     .click()

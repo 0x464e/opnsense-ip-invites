@@ -180,6 +180,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/links", s.admin(s.links))
 	mux.HandleFunc("POST /api/admin/links", s.admin(s.createLink))
 	mux.HandleFunc("POST /api/admin/links/{id}/revoke", s.admin(s.revokeLink))
+	mux.HandleFunc("POST /api/admin/links/{id}/authorize", s.admin(s.authorizeLink))
 	mux.HandleFunc("GET /api/admin/grants", s.admin(s.grants))
 	mux.HandleFunc("POST /api/admin/grants/{id}/revoke", s.admin(s.revokeGrant))
 	mux.HandleFunc("POST /api/admin/grants/{id}/extend", s.admin(s.extendGrant))
@@ -390,6 +391,22 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 	write(w, 201, map[string]any{"link": l, "url": c.Server.PublicURL + "/i/" + token})
 }
+func (s *Server) authorizeLink(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IP string `json:"ip"`
+	}
+	if !body(w, r, &in) {
+		return
+	}
+	ip, err := service.PublicIPv4(strings.TrimSpace(in.IP))
+	if err != nil {
+		problem(w, 422, "invalid_ip", "Enter a public IPv4 address.")
+		return
+	}
+	_, err = s.svc.AuthorizeLink(r.Context(), r.PathValue("id"), ip.String())
+	s.mutationResult(w, err)
+}
+
 func (s *Server) revokeLink(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		RevokeGrants *bool `json:"revoke_grants"`
