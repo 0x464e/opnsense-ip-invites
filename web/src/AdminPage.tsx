@@ -26,6 +26,7 @@ type Dialog =
   | { kind: 'delete-list'; list: AccessList }
   | { kind: 'create' }
   | { kind: 'link'; invite: Invite }
+  | { kind: 'authorize'; invite: Invite }
   | { kind: 'grant'; grant: Grant }
   | { kind: 'extend'; grant: Grant }
   | null
@@ -311,15 +312,26 @@ export default function AdminPage() {
                           <StatusTag value={state(invite)} />
                         </td>
                         <td className="td">
-                          <button
-                            className="btn-icon"
-                            disabled={!!invite.revoked_at && invite.active_ips === 0}
-                            aria-label={`Revoke ${invite.label}`}
-                            title="Revoke invitation"
-                            onClick={() => setDialog({ kind: 'link', invite })}
-                          >
-                            <CircleSlash size={16} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              className="btn"
+                              disabled={state(invite) !== 'active'}
+                              aria-label={`Add IP to ${invite.label}`}
+                              onClick={() => setDialog({ kind: 'authorize', invite })}
+                            >
+                              <Plus size={14} />
+                              Add IP
+                            </button>
+                            <button
+                              className="btn-icon"
+                              disabled={!!invite.revoked_at && invite.active_ips === 0}
+                              aria-label={`Revoke ${invite.label}`}
+                              title="Revoke invitation"
+                              onClick={() => setDialog({ kind: 'link', invite })}
+                            >
+                              <CircleSlash size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -436,6 +448,13 @@ export default function AdminPage() {
           bootstrap={boot.data}
           onClose={() => setDialog(null)}
           onCreated={() => changed('Invitation created.')}
+        />
+      )}
+      {dialog?.kind === 'authorize' && (
+        <AuthorizeIPDialog
+          invite={dialog.invite}
+          onClose={() => setDialog(null)}
+          onChanged={changed}
         />
       )}
       {dialog?.kind === 'link' && (
@@ -668,6 +687,69 @@ function CreateInvite({
     </Modal>
   )
 }
+function AuthorizeIPDialog({
+  invite,
+  onClose,
+  onChanged,
+}: {
+  invite: Invite
+  onClose: () => void
+  onChanged: (message?: string) => void
+}) {
+  const [ip, setIP] = useState('')
+  const authorize = useMutation({
+    mutationFn: () =>
+      api<MutationResult>(`/api/admin/links/${invite.id}/authorize`, { ip: ip.trim() }),
+    onSuccess: (result) => onChanged(result.message || 'IP authorized.'),
+  })
+  return (
+    <Modal title="Add IP to invitation" onClose={onClose}>
+      <p className="text-sm leading-relaxed text-muted">
+        Grant {duration(invite.access_seconds)} of access through{' '}
+        <strong className="text-ink">{invite.label}</strong>.
+        {invite.max_ips === 1 && ' A different IP replaces the current grant for this invitation.'}
+      </p>
+      <form
+        className="mt-5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (ip.trim() && !authorize.isPending) {
+            authorize.mutate(undefined, { onSuccess: onClose })
+          }
+        }}
+      >
+        <label className="label" htmlFor="authorize-ip">
+          Public IPv4 address
+        </label>
+        <input
+          id="authorize-ip"
+          className="field font-mono"
+          value={ip}
+          onChange={(event) => setIP(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          required
+        />
+        <div className="mt-5">
+          <ErrorNotice error={authorize.error} />
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!ip.trim() || authorize.isPending}
+          >
+            {authorize.isPending ? 'Authorizing…' : 'Authorize IP'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 function ExtendGrantDialog({
   grant,
   onClose,

@@ -97,20 +97,44 @@ func (s *Service) CreateLink(ctx context.Context, l store.Link) (store.Link, str
 func (s *Service) Authorize(ctx context.Context, token, ip string) (store.Grant, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	l, err := s.DB.LookupToken(ctx, token)
+	if err != nil {
+		return store.Grant{}, err
+	}
+	return s.authorizeLocked(ctx, l, ip)
+}
+
+func (s *Service) AuthorizeLink(ctx context.Context, id, ip string) (store.Grant, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l, err := s.DB.Link(ctx, id)
+	if err != nil {
+		return store.Grant{}, err
+	}
+	return s.authorizeLocked(ctx, l, ip)
+}
+
+func (s *Service) authorizeLocked(ctx context.Context, l store.Link, ip string) (store.Grant, error) {
 	parsed, err := PublicIPv4(ip)
 	if err != nil {
 		return store.Grant{}, err
 	}
-	ip = parsed.String()
-	l, list, err := s.Preview(ctx, token)
+	now := s.Now()
+	if err := store.ValidLink(l, now); err != nil {
+		return store.Grant{}, err
+	}
+	list, err := s.DB.List(ctx, l.ListID)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.Grant{}, ErrList
+	}
 	if err != nil {
 		return store.Grant{}, err
 	}
-	g, err := s.DB.Authorize(ctx, l.ID, ip, s.Now())
+	g, err := s.DB.Authorize(ctx, l.ID, parsed.String(), now)
 	if err != nil {
 		return g, err
 	}
-	if err = s.syncLocked(ctx, list.Alias); err != nil {
+	if err := s.syncLocked(ctx, list.Alias); err != nil {
 		return g, ErrSync
 	}
 	return g, nil

@@ -27,6 +27,7 @@ Every admin call requires the trusted immediate proxy and `X-Invites-Admin-Secre
 | POST | `/api/admin/lists/{id}/delete` | Delete the list, revoke its links/grants, and reconcile its retired alias. |
 | GET | `/api/admin/links` | Paginated invitation metadata, without raw tokens or hashes. |
 | POST | `/api/admin/links` | Create an invitation and return its metadata plus the shareable URL once. |
+| POST | `/api/admin/links/{id}/authorize` | Send `{"ip":"203.0.113.42"}` to authorize an IPv4 address on an active invitation with its usual duration and IP limit. Returns 200 after firewall confirmation or 202 if synchronization is pending. |
 | POST | `/api/admin/links/{id}/revoke` | Disable link; `{"revoke_grants":true}` also revokes its grants. Omitted flag defaults to true. |
 | GET | `/api/admin/grants` | Paginated grants with individual and effective list/IP expiry. |
 | POST | `/api/admin/grants/{id}/revoke` | Send `{}` to revoke one grant. |
