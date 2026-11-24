@@ -64,6 +64,38 @@ test('admin creates an invite using configured defaults; visitor authorizes; adm
   await expect(page.getByRole('heading', { name: 'This invitation was revoked' })).toBeVisible()
 })
 
+test('a completed manual authorization leaves a replacement dialog open', async ({
+  page,
+}, info) => {
+  const ip = info.project.name === 'mobile' ? '8.26.56.27' : '208.67.220.220'
+  const responseGate = Promise.withResolvers<void>()
+  await page.route('**/api/admin/links/*/authorize', async (route) => {
+    await responseGate.promise
+    await route.continue()
+  })
+
+  await page.goto('/admin')
+  await page.getByRole('button', { name: 'Add IP to Weekend group', exact: true }).click()
+  const manual = page.getByRole('dialog', { name: 'Add IP to invitation' })
+  await manual.getByLabel('Public IPv4 address').fill(ip)
+
+  try {
+    const submitted = page.waitForRequest('**/api/admin/links/*/authorize')
+    await manual.getByRole('button', { name: 'Authorize IP', exact: true }).click()
+    await submitted
+    await manual.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('button', { name: 'New invitation', exact: true }).click()
+    const draft = page.getByRole('dialog', { name: 'New invitation' })
+    await draft.getByLabel('Label', { exact: true }).fill('Unsaved invitation')
+
+    responseGate.resolve()
+    await expect(page.getByRole('status')).toContainText('IP authorized.')
+    await expect(draft.getByLabel('Label', { exact: true })).toHaveValue('Unsaved invitation')
+  } finally {
+    responseGate.resolve()
+  }
+})
+
 test('IPv6 visits cannot authorize and show the configured IPv4 entry link', async ({ page }) => {
   const response = await page.request.get('http://127.0.0.1:18080/__fixture/invite')
   const { token } = await response.json()

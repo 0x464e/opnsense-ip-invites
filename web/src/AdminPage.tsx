@@ -700,10 +700,7 @@ function AuthorizeIPDialog({
   const authorize = useMutation({
     mutationFn: () =>
       api<MutationResult>(`/api/admin/links/${invite.id}/authorize`, { ip: ip.trim() }),
-    onSuccess: (result) => {
-      onChanged(result.message || 'IP authorized.')
-      onClose()
-    },
+    onSuccess: (result) => onChanged(result.message || 'IP authorized.'),
   })
   return (
     <Modal title="Add IP to invitation" onClose={onClose}>
@@ -716,7 +713,9 @@ function AuthorizeIPDialog({
         className="mt-5"
         onSubmit={(event) => {
           event.preventDefault()
-          if (ip.trim() && !authorize.isPending) authorize.mutate()
+          if (ip.trim() && !authorize.isPending) {
+            authorize.mutate(undefined, { onSuccess: onClose })
+          }
         }}
       >
         <label className="label" htmlFor="authorize-ip">
